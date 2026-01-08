@@ -200,3 +200,19 @@ if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True):
                             "Boiling Point": f"{det['boiling_point_f']}°F"
                         })
                     st.dataframe(pd.DataFrame(t_data), use_container_width=True, hide_index=True)
+                    # --- FOOTER ---
+st.divider()
+
+footer_col1, footer_col2, footer_col3 = st.columns(3)
+
+with footer_col1:
+    st.caption("🧬 GreenForge v2.0")
+    st.caption("Computational Pharmacognosy")
+
+with footer_col2:
+    st.caption("📚 Research-Based")
+    st.caption("500+ Strains, thermal modeling")
+
+with footer_col3:
+    st.caption("📍 Manteca, California")
+    st.caption("Proprietary Logic Engine")
