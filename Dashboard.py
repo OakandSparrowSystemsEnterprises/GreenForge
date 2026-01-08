@@ -2,47 +2,62 @@ import streamlit as st
 import requests
 import pandas as pd
 
-# Page Config: This gives it that "Shiny" App feel
+# Page Config
 st.set_page_config(page_title="GreenForge Engine", page_icon="🧬", layout="wide")
 
-# Custom CSS for Glowing Elements
-st.markdown("""
-    <style>
-    .main { background-color: #0e1117; }
-    .stMetric { 
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-        border: 1px solid rgba(102, 126, 234, 0.3);
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
-    }
-    .stSlider > div > div > div > div { 
-        background: linear-gradient(to right, #667eea, #764ba2);
-    }
-    .success-box {
-        background: rgba(74, 222, 128, 0.1);
-        border-left: 4px solid #4ade80;
-        padding: 15px;
-        border-radius: 8px;
-        margin: 10px 0;
-    }
-    .warning-box {
-        background: rgba(251, 191, 36, 0.1);
-        border-left: 4px solid #fbbf24;
-        padding: 15px;
-        border-radius: 8px;
-        margin: 10px 0;
-    }
-    .error-box {
-        background: rgba(239, 68, 68, 0.1);
-        border-left: 4px solid #ef4444;
-        padding: 15px;
-        border-radius: 8px;
-        margin: 10px 0;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# --- CSS CONFIGURATION ---
+# We use single quotes here to avoid conflicts with the double quotes in the HTML
+css_style = '''
+<style>
+.main { background-color: #0e1117; }
 
+.stMetric { 
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+}
+
+.stSlider > div > div > div > div { 
+    background: linear-gradient(to right, #667eea, #764ba2);
+}
+
+.success-box {
+    background: rgba(74, 222, 128, 0.1);
+    border-left: 4px solid #4ade80;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.warning-box {
+    background: rgba(251, 191, 36, 0.1);
+    border-left: 4px solid #fbbf24;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.error-box {
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 4px solid #ef4444;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+/* FIX: Force pointer cursor on dropdowns */
+div[data-baseweb="select"] > div, 
+div[data-baseweb="select"] input {
+    cursor: pointer !important;
+}
+</style>
+'''
+
+st.markdown(css_style, unsafe_allow_html=True)
+
+# --- MAIN APP START ---
 st.title("🧬 GreenForge: Computational Pharmacognosy Engine")
 st.subheader("Research-Based Medical Cannabis Analysis with Thermal Modeling")
 
@@ -56,13 +71,13 @@ with st.sidebar:
         help="Select the primary medical condition")
     
     severity = st.slider("Severity Level", 1, 10, 8,
-                        help="1 = Mild, 10 = Severe")
+                         help="1 = Mild, 10 = Severe")
     
     st.divider()
     st.header("🌡️ Thermal Interface")
     
     temp_f = st.slider("Device Temperature (°F)", 300, 500, 350, step=5,
-                      help="Vaporizer temperature setting")
+                       help="Vaporizer temperature setting")
     
     # Temperature zone indicator
     if temp_f < 311:
@@ -311,7 +326,7 @@ with footer_col1:
 
 with footer_col2:
     st.caption("📚 Research-Based")
-    st.caption("30+ compounds, thermal modeling")
+    st.caption("500+ Strains, 30+ compounds, thermal modeling")
 
 with footer_col3:
     st.caption("📍 Manteca, California")
