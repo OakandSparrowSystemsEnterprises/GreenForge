@@ -1,0 +1,23 @@
+{
+  "user_profile": {
+    "interface_temp": 220,
+    "conditions": [
+      { "name": "ADHD/Focus", "severity": 8 },
+      { "name": "Depression/Low Energy", "severity": 6 }
+    ]
+  },
+  "product_list": [
+    {
+      "id": "GF-FOCUS-001",
+      "name": "Daylight Clarity",
+      "growStyle": "living_soil",
+      "compounds": [
+        { "name": "THC", "val": 15.0 },
+        { "name": "THCV", "val": 2.5 },
+        { "name": "Alpha-Pinene", "val": 1.1 },
+        { "name": "Limonene", "val": 0.8 },
+        { "name": "Myrcene", "val": 0.1 }
+      ]
+    }
+  ]
+}

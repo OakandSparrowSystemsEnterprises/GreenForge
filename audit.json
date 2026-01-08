@@ -1,0 +1,20 @@
+{
+  "user_profile": {
+    "interface_temp": 350,
+    "conditions": [
+      { "name": "Migraine", "severity": 8 },
+      { "name": "Neuropathic Pain", "severity": 7 }
+    ]
+  },
+  "product_list": [
+    {
+      "name": "Scientific Sample A",
+      "growStyle": "soil",
+      "compounds": [
+        { "name": "THCP", "val": 1.2 },
+        { "name": "Cannflavin A", "val": 0.8 },
+        { "name": "Borneol", "val": 0.5 }
+      ]
+    }
+  ]
+}

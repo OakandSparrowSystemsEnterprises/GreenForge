@@ -1,0 +1,21 @@
+﻿{
+  "user_profile": {
+    "interface_temp": 220,
+    "conditions": [
+      { "name": "ADHD/Focus", "severity": 10 }
+    ]
+  },
+  "product_list": [
+    {
+      "id": "GF-PERFECT-FOCUS",
+      "name": "Quantum Clarity (Zero-Myrcene)",
+      "growStyle": "living_soil",
+      "compounds": [
+        { "name": "THCV", "val": 5.0 },
+        { "name": "Alpha-Pinene", "val": 2.0 },
+        { "name": "Limonene", "val": 1.5 },
+        { "name": "THC", "val": 10.0 }
+      ]
+    }
+  ]
+}

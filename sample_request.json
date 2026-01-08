@@ -1,0 +1,25 @@
+{
+  "user_profile": {
+    "interface_temp": 220,
+    "conditions": [
+      { "name": "Neuropathic Pain", "severity": 7 },
+      { "name": "Anxiety", "severity": 5 }
+    ]
+  },
+  "product_list": [
+    {
+      "id": "GF-TEST-001",
+      "name": "Balanced Evening Relief",
+      "growStyle": "soil",
+      "compounds": [
+        { "name": "THC", "val": 18.0, "type": "cannabinoid" },
+        { "name": "CBD", "val": 6.0, "type": "cannabinoid" },
+        { "name": "Myrcene", "val": 0.4, "type": "terpene" },
+        { "name": "Limonene", "val": 0.9, "type": "terpene" },
+        { "name": "Linalool", "val": 0.6, "type": "terpene" },
+        { "name": "Cannflavin A", "val": 1.2, "type": "flavonoid" },
+        { "name": "CBN", "val": 0.5, "type": "minor_cannabinoid" }
+      ]
+    }
+  ]
+}
