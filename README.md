@@ -1,6 +1,6 @@
 # GreenForge: Computational Pharmacognosy Engine
 
-![GreenForge Dashboard](image_b8cae1.png)
+![GreenForge Dashboard](dashboard.png)
 
 **GreenForge** is a research-based medical cannabis analysis engine designed to bridge the gap between chemical composition and clinical efficacy. Unlike standard recommendation tools, GreenForge utilizes a **proprietary thermal modeling engine** to predict compound degradation and bioavailability at specific device temperatures (e.g., Zone B - Medical/Entourage).
 
