@@ -119,7 +119,21 @@ st.caption(delivery_notes.get(product_type, ""))
     grow_style = st.selectbox("Grow Style", 
         ["living_soil", "sun_grown", "hydroponic", "drought_stress"],
         help="Cultivation method affects compound expression")
-    
+    st.divider()
+st.header("🎯 Product Type")
+
+product_type = st.selectbox("Delivery Method", 
+    ["flower", "concentrate", "vape_cart", "edible"],
+    help="How will this product be consumed?")
+
+# Show method-specific info
+delivery_notes = {
+    "flower": "🌿 Thermal activation required | THC: 15-30% typical",
+    "concentrate": "💎 Thermal activation required | THC: 60-95% typical",
+    "vape_cart": "💨 Pre-heated delivery | May contain additives",
+    "edible": "🍫 Oral ingestion | First-pass metabolism | No thermal needed"
+}
+st.caption(delivery_notes.get(product_type, ""))
     # Show cultivation bonuses
     grow_bonuses = {
         "living_soil": "🌿 +25% terpene diversity",
@@ -192,10 +206,11 @@ if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True):
     
     with st.spinner("Analyzing compound bioavailability and thermal activation..."):
         payload = {
-            "user_profile": {
-                "interface_temp": temp_f,
-                "conditions": [{"name": condition, "severity": severity}]
-            },
+    "user_profile": {
+        "interface_temp": temp_f,
+        "conditions": [{"name": condition, "severity": severity}],
+        "product_type": product_type  # ADD THIS LINE
+    },
             "product_list": [{
                 "name": p_name,
                 "growStyle": grow_style,
