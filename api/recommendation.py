@@ -170,6 +170,7 @@ def calculate_thermal_availability(compounds: List[Compound], temp_f: float) -> 
     """
     Calculate thermal release efficiency based on interface temperature.
     Research: Gradual vaporization begins 36°F (20°C) below boiling point
+    DEGRADATION: Cannabinoids degrade >90°F above boiling point
     """
     availability = {}
     details = {}
@@ -178,16 +179,30 @@ def calculate_thermal_availability(compounds: List[Compound], temp_f: float) -> 
         data = get_compound_data(compound.name)
         if data and data.get("boiling_point_f"):
             bp_f = data["boiling_point_f"]
+            temp_margin = temp_f - bp_f
             
-            if temp_f >= bp_f:
-                # Full availability above boiling point
+            # DEGRADATION DETECTION (NEW LOGIC)
+            if compound.name.upper() in ['THC', 'CBD', 'CBN', 'CBG', 'THCV', 'CBC'] and temp_margin > 90:
+                # Cannabinoids oxidize and degrade >90°F above boiling point
+                availability[compound.name] = 0.6  # Reduced availability due to degradation
+                details[compound.name] = {
+                    "available": 0.6,
+                    "boiling_point_f": bp_f,
+                    "status": "degrading",
+                    "temp_margin": round(temp_margin, 1),
+                    "warning": f"⚠️ {round(temp_margin)}°F above optimal - oxidation risk"
+                }
+            
+            elif temp_f >= bp_f:
+                # Full availability above boiling point (but not overheated)
                 availability[compound.name] = 1.0
                 details[compound.name] = {
                     "available": 1.0,
                     "boiling_point_f": bp_f,
                     "status": "fully_active",
-                    "temp_margin": round(temp_f - bp_f, 1)
+                    "temp_margin": round(temp_margin, 1)
                 }
+            
             elif temp_f >= (bp_f - 36):  # 36°F = 20°C gradient
                 # Partial availability within 36°F of boiling point
                 availability[compound.name] = (temp_f - (bp_f - 36)) / 36
@@ -197,6 +212,7 @@ def calculate_thermal_availability(compounds: List[Compound], temp_f: float) -> 
                     "status": "partially_active",
                     "needed_temp_f": round(bp_f, 1)
                 }
+            
             else:
                 # Locked below threshold
                 availability[compound.name] = 0.0
@@ -207,8 +223,9 @@ def calculate_thermal_availability(compounds: List[Compound], temp_f: float) -> 
                     "needed_temp_f": round(bp_f, 1),
                     "deficit": round(bp_f - temp_f, 1)
                 }
+        
         else:
-            # No data - assume available (conservative)
+            # No boiling point data - assume available (conservative approach)
             availability[compound.name] = 1.0
             details[compound.name] = {
                 "available": 1.0,
