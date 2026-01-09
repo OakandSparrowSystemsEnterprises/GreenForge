@@ -1,47 +1,55 @@
 import uvicorn
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
 
 from api.recommendation import router
+from config import APIConfig, DATA_DIR, DB_PATH, LoggingConfig
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, LoggingConfig.DEFAULT_LEVEL),
+    format=LoggingConfig.LOG_FORMAT,
+    datefmt=LoggingConfig.DATE_FORMAT
+)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage startup and shutdown events."""
-    data_dir = "data"
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
-        print(f"✓ Created {data_dir} directory")
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
+        logger.info(f"Created {DATA_DIR} directory")
 
-    db_path = os.path.join(data_dir, "greenforge.db")
-    if os.path.exists(db_path):
-        print(f"✓ Database found at {db_path}")
+    if os.path.exists(DB_PATH):
+        logger.info(f"Database found at {DB_PATH}")
     else:
-        print(f"⚠ WARNING: Database not found at {db_path}")
+        logger.warning(f"Database not found at {DB_PATH}")
 
-    print("🚀 GreenForge Engine: ONLINE")
+    logger.info("🚀 GreenForge Engine: ONLINE")
 
     yield
 
-    print("🛑 GreenForge Engine: OFFLINE")
+    logger.info("🛑 GreenForge Engine: OFFLINE")
 
 
 app = FastAPI(
-    title="GreenForge Engine",
-    description="Cannabis product recommendation API with thermal interface modeling",
-    version="1.0.0",
+    title=APIConfig.TITLE,
+    description=APIConfig.DESCRIPTION,
+    version=APIConfig.VERSION,
     lifespan=lifespan,
 )
 
 # CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=APIConfig.ALLOW_ORIGINS,  # Restrict in production
+    allow_credentials=APIConfig.ALLOW_CREDENTIALS,
+    allow_methods=APIConfig.ALLOW_METHODS,
+    allow_headers=APIConfig.ALLOW_HEADERS,
 )
 
 # Mount the recommendation router
@@ -64,8 +72,7 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Detailed health check with database status."""
-    db_path = os.path.join("data", "greenforge.db")
-    db_exists = os.path.exists(db_path)
+    db_exists = os.path.exists(DB_PATH)
     return {
         "status": "healthy" if db_exists else "degraded",
         "database": "connected" if db_exists else "missing",
@@ -76,8 +83,8 @@ async def health_check():
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",  # ✅ must match the lowercase filename
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info",
+        host=APIConfig.HOST,
+        port=APIConfig.PORT,
+        reload=APIConfig.RELOAD,
+        log_level=APIConfig.LOG_LEVEL,
     )

@@ -4,8 +4,9 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
+from config import DB_PATH, DatabaseTables
+
 router = APIRouter(prefix="/api/v1")
-DB_PATH = os.path.join("data", "greenforge.db")
 
 
 class Compound(BaseModel):
@@ -578,20 +579,29 @@ async def list_compounds():
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        compounds = {
-            "cannabinoids": [],
-            "terpenes": [],
-            "flavonoids": [],
-            "minor_cannabinoids": []
+        # Valid table names from config - prevents SQL injection
+        valid_tables = {
+            DatabaseTables.CANNABINOIDS: "cannabinoids",
+            DatabaseTables.TERPENES: "terpenes",
+            DatabaseTables.FLAVONOIDS: "flavonoids",
+            "minor_cannabinoids": "minor_cannabinoids"
         }
-        
-        for table in compounds.keys():
+
+        compounds = {table_key: [] for table_key in valid_tables.values()}
+
+        for table_name in valid_tables.keys():
+            # Table name is from a controlled whitelist, safe from SQL injection
+            if table_name not in DatabaseTables.VALID_COMPOUND_TYPES and table_name != "minor_cannabinoids":
+                continue
+
+            table_key = valid_tables[table_name]
             try:
-                cursor.execute(f"SELECT name, boiling_point FROM {table} ORDER BY name")
+                # Use parameterized queries where possible, but table names must be validated via whitelist
+                cursor.execute(f"SELECT name, boiling_point FROM {table_name} ORDER BY name")
                 rows = cursor.fetchall()
-                compounds[table] = [
+                compounds[table_key] = [
                     {
-                        "name": row[0], 
+                        "name": row[0],
                         "boiling_point_f": celsius_to_fahrenheit(row[1]),
                         "boiling_point_c": row[1]
                     }
