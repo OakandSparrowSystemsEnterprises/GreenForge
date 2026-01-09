@@ -100,6 +100,21 @@ with st.sidebar:
     
     st.divider()
     st.header("🌱 Cultivation Data")
+    st.divider()
+st.header("🎯 Product Type")
+
+product_type = st.selectbox("Delivery Method", 
+    ["flower", "concentrate", "vape_cart", "edible"],
+    help="How will this product be consumed?")
+
+# Show method-specific info
+delivery_notes = {
+    "flower": "🌿 Thermal activation required | THC: 15-30% typical",
+    "concentrate": "💎 Thermal activation required | THC: 60-95% typical",
+    "vape_cart": "💨 Pre-heated delivery | May contain additives",
+    "edible": "🍫 Oral ingestion | First-pass metabolism | No thermal needed"
+}
+st.caption(delivery_notes.get(product_type, ""))
     
     grow_style = st.selectbox("Grow Style", 
         ["living_soil", "sun_grown", "hydroponic", "drought_stress"],
