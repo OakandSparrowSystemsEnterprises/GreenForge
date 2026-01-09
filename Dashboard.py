@@ -6,7 +6,6 @@ import pandas as pd
 st.set_page_config(page_title="GreenForge Engine", page_icon="🧬", layout="wide")
 
 # --- CSS CONFIGURATION ---
-# We use single quotes here to avoid conflicts with the double quotes in the HTML
 css_style = '''
 <style>
 .main { background-color: #0e1117; }
@@ -100,40 +99,11 @@ with st.sidebar:
     
     st.divider()
     st.header("🌱 Cultivation Data")
-    st.divider()
-st.header("🎯 Product Type")
-
-product_type = st.selectbox("Delivery Method", 
-    ["flower", "concentrate", "vape_cart", "edible"],
-    help="How will this product be consumed?")
-
-# Show method-specific info
-delivery_notes = {
-    "flower": "🌿 Thermal activation required | THC: 15-30% typical",
-    "concentrate": "💎 Thermal activation required | THC: 60-95% typical",
-    "vape_cart": "💨 Pre-heated delivery | May contain additives",
-    "edible": "🍫 Oral ingestion | First-pass metabolism | No thermal needed"
-}
-st.caption(delivery_notes.get(product_type, ""))
     
     grow_style = st.selectbox("Grow Style", 
         ["living_soil", "sun_grown", "hydroponic", "drought_stress"],
         help="Cultivation method affects compound expression")
-    st.divider()
-st.header("🎯 Product Type")
-
-product_type = st.selectbox("Delivery Method", 
-    ["flower", "concentrate", "vape_cart", "edible"],
-    help="How will this product be consumed?")
-
-# Show method-specific info
-delivery_notes = {
-    "flower": "🌿 Thermal activation required | THC: 15-30% typical",
-    "concentrate": "💎 Thermal activation required | THC: 60-95% typical",
-    "vape_cart": "💨 Pre-heated delivery | May contain additives",
-    "edible": "🍫 Oral ingestion | First-pass metabolism | No thermal needed"
-}
-st.caption(delivery_notes.get(product_type, ""))
+    
     # Show cultivation bonuses
     grow_bonuses = {
         "living_soil": "🌿 +25% terpene diversity",
@@ -142,6 +112,22 @@ st.caption(delivery_notes.get(product_type, ""))
         "drought_stress": "💪 +15% concentration"
     }
     st.caption(grow_bonuses.get(grow_style, ""))
+    
+    st.divider()
+    st.header("🎯 Product Type")
+    
+    product_type = st.selectbox("Delivery Method", 
+        ["flower", "concentrate", "vape_cart", "edible"],
+        help="How will this product be consumed?")
+    
+    # Show method-specific info
+    delivery_notes = {
+        "flower": "🌿 Thermal activation required | THC: 15-30% typical",
+        "concentrate": "💎 Thermal activation required | THC: 60-95% typical",
+        "vape_cart": "💨 Pre-heated delivery | May contain additives",
+        "edible": "🍫 Oral ingestion | First-pass metabolism | No thermal needed"
+    }
+    st.caption(delivery_notes.get(product_type, ""))
 
 # --- MAIN: PRODUCT INPUT ---
 col1, col2 = st.columns([1, 1])
@@ -186,7 +172,7 @@ with col1:
                  "Caryophyllene", "Humulene", "Terpinolene",
                  "Cannflavin A", "Cannflavin B", "Quercetin", "Apigenin", "Borneol"],
                 key=f"compound_{i}",
-                index=0 if i == 0 else (10 if i == 1 else 5)  # Default: THC, Limonene, Alpha-Pinene
+                index=0 if i == 0 else (10 if i == 1 else 5)
             )
         
         with col_b:
@@ -206,11 +192,11 @@ if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True):
     
     with st.spinner("Analyzing compound bioavailability and thermal activation..."):
         payload = {
-    "user_profile": {
-        "interface_temp": temp_f,
-        "conditions": [{"name": condition, "severity": severity}],
-        "product_type": product_type  # ADD THIS LINE
-    },
+            "user_profile": {
+                "interface_temp": temp_f,
+                "conditions": [{"name": condition, "severity": severity}],
+                "product_type": product_type
+            },
             "product_list": [{
                 "name": p_name,
                 "growStyle": grow_style,
@@ -261,7 +247,6 @@ if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True):
                         for cond_name, cond_data in data['analysis'].items():
                             with st.expander(f"**{cond_name}** - Mode: {cond_data.get('mode', 'unknown')}"):
                                 
-                                # Show score components
                                 if 'signal' in cond_data:
                                     st.write(f"**Signal Strength:** {cond_data['signal']:.2f}")
                                 
@@ -287,6 +272,12 @@ if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True):
                             else:
                                 st.warning(warning)
                     
+                    # Method notes (NEW - shows delivery method insights)
+                    if data.get('method_notes'):
+                        st.markdown("#### 📋 Delivery Method Notes")
+                        for note in data['method_notes']:
+                            st.info(note)
+                    
                     # Thermal activation details
                     if data.get('thermal_details'):
                         st.markdown("#### 🌡️ Thermal Activation Status")
@@ -297,7 +288,6 @@ if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True):
                             bp = details.get('boiling_point_f', 'N/A')
                             avail = details.get('available', 0)
                             
-                            # Status emoji
                             if 'fully' in status:
                                 status_icon = "✅"
                             elif 'partial' in status:
@@ -341,7 +331,7 @@ if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True):
                 st.error(f"API Error: {response.status_code} - {response.text}")
                 
         except requests.exceptions.ConnectionError:
-            st.error("🔌 **Engine Offline**\n\nEnsure the API is running:\n```\npython Main.py\n```")
+            st.error("🔌 **Engine Offline**\n\nEnsure the API is running:\n```\npython main.py\n```")
         except Exception as e:
             st.error(f"**Error:** {str(e)}")
 
@@ -351,8 +341,8 @@ st.divider()
 footer_col1, footer_col2, footer_col3 = st.columns(3)
 
 with footer_col1:
-    st.caption("🧬 GreenForge v2.0")
-    st.caption("Computational Pharmacognosy")
+    st.caption("🧬 GreenForge v2.1")
+    st.caption("Universal Delivery System")
 
 with footer_col2:
     st.caption("📚 Research-Based")
