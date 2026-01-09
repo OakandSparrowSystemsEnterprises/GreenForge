@@ -200,7 +200,8 @@ if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True):
                             "Boiling Point": f"{det['boiling_point_f']}°F"
                         })
                     st.dataframe(pd.DataFrame(t_data), use_container_width=True, hide_index=True)
-                    # --- FOOTER ---
+
+# --- FOOTER (This is now OUTSIDE the button logic) ---
 st.divider()
 
 footer_col1, footer_col2, footer_col3 = st.columns(3)
