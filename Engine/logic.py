@@ -1,19 +1,48 @@
+"""
+GreenForge - Integrated Pharmacognosy Engine
+
+PROPRIETARY SOFTWARE - ALL RIGHTS RESERVED
+Copyright (c) 2025-2026 Joshua Johosky
+
+This file contains proprietary algorithms and trade secrets.
+Unauthorized use, copying, modification, or distribution is PROHIBITED.
+See LICENSE file for terms.
+"""
 import logging
 from typing import Optional, Dict, List, Any
 from config import CompoundWeights, ThermalZones, ScoringConfig
 from db_utils import get_boiling_point
+from auth import require_authorization, AuthorizationError
 
 logger = logging.getLogger(__name__)
 
 class IntegratedPharmacognosyEngine:
     def __init__(self, pharma_db_path: str, kb_db_path: str):
+        """
+        Initialize the Pharmacognosy Engine.
+
+        PROPRIETARY: This engine contains trade secret algorithms.
+
+        Raises:
+            AuthorizationError: If license validation fails
+        """
+        # AUTHORIZATION CHECK - Required for proprietary algorithm access
+        from auth import check_authorization
+        try:
+            check_authorization()
+        except AuthorizationError as e:
+            logger.critical("UNAUTHORIZED ACCESS ATTEMPT")
+            raise
+
         self.pharma_db_path = pharma_db_path
         # WEIGHT ADJUSTMENT: Prioritizing "Flavor" (Terpenes) over "Noise" (THC)
+        # PROPRIETARY FORMULA
         self.BASE_WEIGHTS = {
             'terpene': CompoundWeights.TERPENE,
             'cannabinoid': CompoundWeights.CANNABINOID,
             'flavonoid': CompoundWeights.FLAVONOID
         }
+        logger.info("Pharmacognosy Engine initialized (authorized)")
 
     def _get_boiling_point(self, name: str, c_type: str) -> Optional[float]:
         """Get boiling point for a compound from the database."""
@@ -60,7 +89,23 @@ class IntegratedPharmacognosyEngine:
         """Get safety zone information for a given temperature."""
         return ThermalZones.get_zone_info(temp)
 
+    @require_authorization
     def rank_products_integrated(self, user: Dict[str, Any], products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Rank products using proprietary pharmacognosy algorithms.
+
+        PROPRIETARY: This method contains trade secret scoring algorithms.
+
+        Args:
+            user: User profile with conditions and preferences
+            products: List of products to rank
+
+        Returns:
+            Sorted list of products with match scores
+
+        Raises:
+            AuthorizationError: If license validation fails
+        """
         results = []
         temp = user.get('interface_temp', ThermalZones.DEFAULT_TEMP)
         

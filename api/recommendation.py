@@ -1,3 +1,13 @@
+"""
+GreenForge - Recommendation API
+
+PROPRIETARY SOFTWARE - ALL RIGHTS RESERVED
+Copyright (c) 2025-2026 Joshua Johosky
+
+This file contains proprietary pharmacognosy algorithms and trade secrets.
+Unauthorized use, copying, modification, or distribution is PROHIBITED.
+See LICENSE file for terms.
+"""
 import sqlite3
 import os
 from fastapi import APIRouter

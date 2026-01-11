@@ -1,12 +1,23 @@
+"""
+GreenForge - Main API Server
+
+PROPRIETARY SOFTWARE - ALL RIGHTS RESERVED
+Copyright (c) 2025-2026 Joshua Johosky
+
+This software contains proprietary algorithms and trade secrets.
+Unauthorized use is PROHIBITED. See LICENSE file for terms.
+"""
 import uvicorn
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
+import sys
 
 from api.recommendation import router
 from config import APIConfig, DATA_DIR, DB_PATH, LoggingConfig
+from auth import check_authorization, AuthorizationError
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +31,22 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage startup and shutdown events."""
+    # AUTHORIZATION CHECK - Required before starting API
+    logger.info("Checking GreenForge authorization...")
+    try:
+        check_authorization()
+        logger.info("✓ Authorization validated")
+    except AuthorizationError as e:
+        logger.critical("=" * 70)
+        logger.critical("AUTHORIZATION FAILED")
+        logger.critical("=" * 70)
+        logger.critical(str(e))
+        logger.critical("=" * 70)
+        logger.critical("GreenForge cannot start without valid authorization.")
+        logger.critical("This software is proprietary and protected by law.")
+        logger.critical("=" * 70)
+        sys.exit(1)
+
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR)
         logger.info(f"Created {DATA_DIR} directory")
@@ -29,7 +56,7 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning(f"Database not found at {DB_PATH}")
 
-    logger.info("🚀 GreenForge Engine: ONLINE")
+    logger.info("🚀 GreenForge Engine: ONLINE (Authorized)")
 
     yield
 
