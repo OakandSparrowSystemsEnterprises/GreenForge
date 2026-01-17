@@ -100,17 +100,98 @@ engine = get_engine()
 st.title("🧬 GreenForge: Computational Pharmacognosy Engine")
 st.subheader("Research-Based Medical Cannabis Analysis with Thermal Modeling")
 
+# --- CONDITION PRESETS (100% Match Score Formulations) ---
+CONDITION_PRESETS = {
+    "Neuropathic Pain": {
+        "temp": 370,
+        "compounds": [
+            {"name": "THC", "val": 25.0},
+            {"name": "Myrcene", "val": 2.0},
+            {"name": "Caryophyllene", "val": 1.0},
+            {"name": "Cannflavin A", "val": 0.2}
+        ]
+    },
+    "Chronic Inflammation": {
+        "temp": 370,
+        "compounds": [
+            {"name": "THC", "val": 20.0},
+            {"name": "Myrcene", "val": 2.5},
+            {"name": "Caryophyllene", "val": 1.5},
+            {"name": "Cannflavin A", "val": 0.2}
+        ]
+    },
+    "ADHD/Focus": {
+        "temp": 350,
+        "compounds": [
+            {"name": "THC", "val": 30.0},
+            {"name": "Alpha-Pinene", "val": 2.0},
+            {"name": "Limonene", "val": 1.5}
+        ]
+    },
+    "Depression": {
+        "temp": 350,
+        "compounds": [
+            {"name": "THC", "val": 24.0},
+            {"name": "Limonene", "val": 2.0},
+            {"name": "Alpha-Pinene", "val": 1.8}
+        ]
+    },
+    "Migraine": {
+        "temp": 350,
+        "compounds": [
+            {"name": "THC", "val": 24.0},
+            {"name": "Limonene", "val": 2.0},
+            {"name": "Caryophyllene", "val": 1.8},
+            {"name": "CBG", "val": 1.0}
+        ]
+    },
+    "Insomnia": {
+        "temp": 390,
+        "compounds": [
+            {"name": "THC", "val": 28.0},
+            {"name": "Myrcene", "val": 2.5},
+            {"name": "Linalool", "val": 1.2},
+            {"name": "CBN", "val": 2.0}
+        ]
+    },
+    "Anxiety": {
+        "temp": 390,
+        "compounds": [
+            {"name": "THC", "val": 20.0},
+            {"name": "Linalool", "val": 2.0},
+            {"name": "Limonene", "val": 1.5}
+        ]
+    },
+    "Get High": {
+        "temp": 365,
+        "compounds": [
+            {"name": "THC", "val": 35.0},
+            {"name": "Myrcene", "val": 1.8},
+            {"name": "Limonene", "val": 1.2}
+        ]
+    }
+}
+
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("👤 Patient Profile")
-    condition = st.selectbox("Primary Condition", 
-        ["Neuropathic Pain", "Migraine", "ADHD/Focus", "Insomnia", "Anxiety", 
+    condition = st.selectbox("Primary Condition",
+        ["Neuropathic Pain", "Migraine", "ADHD/Focus", "Insomnia", "Anxiety",
          "Chronic Inflammation", "Depression", "Get High"])
     severity = st.slider("Severity Level", 1, 10, 8)
-    
+
+    # Auto-load preset button
+    if st.button("🎯 Load Optimal Formulation", use_container_width=True):
+        st.session_state.load_preset = condition
+
+    st.caption("💡 Click to auto-populate a 100% match formulation")
+
     st.divider()
     st.header("🌡️ Thermal Interface")
-    temp_f = st.slider("Device Temperature (°F)", 300, 500, 350, step=5)
+
+    # Set recommended temp based on condition
+    recommended_temp = CONDITION_PRESETS.get(condition, {}).get("temp", 350)
+    temp_f = st.slider("Device Temperature (°F)", 300, 500, recommended_temp, step=5)
     
     if temp_f < 311: zone_color, zone_name = "🟢", "Zone A - Flavor/Cerebral"
     elif temp_f < 365: zone_color, zone_name = "🟢", "Zone B - Medical/Entourage"
@@ -129,24 +210,53 @@ col1, col2 = st.columns([1, 1])
 
 with col1:
     st.markdown("### 📦 Product Formulation")
-    p_name = st.text_input("Product Name", "Clinical Sample 001")
-    
+    p_name = st.text_input("Product Name", f"{condition} - Optimal Profile")
+
     st.markdown("#### Compound Profile")
-    num_compounds = st.number_input("Number of compounds", 1, 10, 3)
+
+    # Auto-load preset if button was clicked
+    preset_data = None
+    if 'load_preset' in st.session_state:
+        preset_data = CONDITION_PRESETS.get(st.session_state.load_preset)
+        if preset_data:
+            st.success(f"✅ Loaded optimal formulation for {st.session_state.load_preset}")
+
+    # Determine number of compounds
+    if preset_data:
+        default_num = len(preset_data["compounds"])
+    else:
+        default_num = 3
+
+    num_compounds = st.number_input("Number of compounds", 1, 10, default_num)
     compounds = []
-    
+
     for i in range(num_compounds):
         c_a, c_b = st.columns([2, 1])
+
+        # Get preset values if available
+        if preset_data and i < len(preset_data["compounds"]):
+            preset_compound = preset_data["compounds"][i]
+            default_name = preset_compound["name"]
+            default_val = preset_compound["val"]
+        else:
+            default_name = "THC" if i == 0 else "Myrcene"
+            default_val = 18.0 if i == 0 else 0.8
+
         with c_a:
-            c_name = st.selectbox(f"Compound {i+1}", 
-                ["THC", "CBD", "CBG", "CBN", "THCV", "THCP", "CBC",
-                 "Myrcene", "Limonene", "Alpha-Pinene", "Linalool", 
-                 "Caryophyllene", "Humulene", "Terpinolene",
-                 "Cannflavin A", "Cannflavin B", "Quercetin", "Apigenin", "Borneol"],
-                key=f"c_{i}", index=0 if i==0 else (10 if i==1 else 5))
+            compound_list = ["THC", "CBD", "CBG", "CBN", "THCV", "THCP", "CBC",
+                             "Myrcene", "Limonene", "Alpha-Pinene", "Linalool",
+                             "Caryophyllene", "Humulene", "Terpinolene",
+                             "Cannflavin A", "Cannflavin B", "Quercetin", "Apigenin", "Borneol"]
+
+            # Find index of default name
+            default_index = compound_list.index(default_name) if default_name in compound_list else 0
+
+            c_name = st.selectbox(f"Compound {i+1}",
+                compound_list,
+                key=f"c_{i}", index=default_index)
         with c_b:
-            c_val = st.number_input("% / ppm", 0.0, 100.0, 
-                1.2 if "Cannflavin" in c_name else (18.0 if c_name=="THC" else 0.8),
+            c_val = st.number_input("% / ppm", 0.0, 100.0,
+                default_val,
                 step=0.1, key=f"v_{i}")
         
         # Determine type for the engine
