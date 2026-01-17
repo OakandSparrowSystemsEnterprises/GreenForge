@@ -1,3 +1,5 @@
+import os
+os.environ["GREENFORGE_DEV_MODE"] = "true"
 import sqlite3
 import os
 # IMPORTS: Note the Capital 'E' in Engine to match your folder
