@@ -163,9 +163,25 @@ class LicenseValidator:
             AuthorizationError: If authorization fails
         """
         # Check for development/bypass mode
-        dev_mode = os.getenv("GREENFORGE_DEV_MODE", "false").lower() == "true"
+        dev_mode = False
+
+        # Try Streamlit secrets first (for Streamlit Cloud)
+        if RUNNING_IN_STREAMLIT:
+            try:
+                if hasattr(st, 'secrets') and 'GREENFORGE_DEV_MODE' in st.secrets:
+                    dev_mode = str(st.secrets['GREENFORGE_DEV_MODE']).lower() == "true"
+                    if dev_mode:
+                        logger.warning("⚠️ DEVELOPMENT MODE - Authorization bypassed (from Streamlit secrets)")
+            except Exception as e:
+                logger.debug(f"Could not read Streamlit secrets: {e}")
+
+        # Fall back to environment variable
+        if not dev_mode:
+            dev_mode = os.getenv("GREENFORGE_DEV_MODE", "false").lower() == "true"
+            if dev_mode:
+                logger.warning("⚠️ DEVELOPMENT MODE - Authorization bypassed (from environment)")
+
         if dev_mode:
-            logger.warning("⚠️ DEVELOPMENT MODE - Authorization bypassed")
             return True
 
         # Try license key validation first
