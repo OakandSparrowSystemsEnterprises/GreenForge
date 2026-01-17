@@ -163,6 +163,7 @@ class LicenseValidator:
             AuthorizationError: If authorization fails
         """
         # Check for development/bypass mode
+
         dev_mode = False
 
         # Try Streamlit secrets first (for Streamlit Cloud)
@@ -182,6 +183,7 @@ class LicenseValidator:
                 logger.warning("⚠️ DEVELOPMENT MODE - Authorization bypassed (from environment)")
 
         if dev_mode:
+          
             return True
 
         # Try license key validation first
