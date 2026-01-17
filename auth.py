@@ -13,6 +13,13 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Check if running in Streamlit
+try:
+    import streamlit as st
+    RUNNING_IN_STREAMLIT = True
+except ImportError:
+    RUNNING_IN_STREAMLIT = False
+
 
 class AuthorizationError(Exception):
     """Raised when authorization fails."""
@@ -29,10 +36,19 @@ class LicenseValidator:
 
     # Master key hash (SHA-256 of your actual license key)
     # To generate: hashlib.sha256(b"YOUR_SECRET_KEY").hexdigest()
-    MASTER_KEY_HASH = os.getenv(
-        "GREENFORGE_LICENSE_HASH",
-        "UNAUTHORIZED"  # Default prevents unauthorized use
-    )
+    @staticmethod
+    def _get_master_key_hash():
+        """Get master key hash from environment or Streamlit secrets."""
+        # Try Streamlit secrets first
+        if RUNNING_IN_STREAMLIT:
+            try:
+                if hasattr(st, 'secrets') and 'GREENFORGE_LICENSE_HASH' in st.secrets:
+                    return st.secrets['GREENFORGE_LICENSE_HASH']
+            except Exception:
+                pass
+
+        # Fall back to environment
+        return os.getenv("GREENFORGE_LICENSE_HASH", "UNAUTHORIZED")
 
     # Trial/Demo mode (disabled by default)
     ALLOW_TRIAL = os.getenv("GREENFORGE_ALLOW_TRIAL", "false").lower() == "true"
@@ -54,7 +70,18 @@ class LicenseValidator:
         """
         # Read from environment if not provided
         if license_key is None:
-            license_key = os.getenv("GREENFORGE_LICENSE_KEY")
+            # Try Streamlit secrets first (for Streamlit Cloud deployments)
+            if RUNNING_IN_STREAMLIT:
+                try:
+                    if hasattr(st, 'secrets') and 'GREENFORGE_LICENSE_KEY' in st.secrets:
+                        license_key = st.secrets['GREENFORGE_LICENSE_KEY']
+                        logger.info("License key loaded from Streamlit secrets")
+                except Exception as e:
+                    logger.debug(f"Could not read Streamlit secrets: {e}")
+
+            # Fall back to environment variable
+            if not license_key:
+                license_key = os.getenv("GREENFORGE_LICENSE_KEY")
 
         if not license_key:
             logger.error("No license key provided")
@@ -69,7 +96,8 @@ class LicenseValidator:
         key_hash = hashlib.sha256(license_key.encode()).hexdigest()
 
         # Validate against master hash
-        if key_hash != LicenseValidator.MASTER_KEY_HASH:
+        master_hash = LicenseValidator._get_master_key_hash()
+        if key_hash != master_hash:
             logger.error("Invalid license key provided")
             raise AuthorizationError(
                 "AUTHORIZATION FAILED: Invalid license key.\n"
@@ -134,6 +162,28 @@ class LicenseValidator:
         Raises:
             AuthorizationError: If authorization fails
         """
+        # Check for development/bypass mode
+        dev_mode = False
+
+        # Try Streamlit secrets first (for Streamlit Cloud)
+        if RUNNING_IN_STREAMLIT:
+            try:
+                if hasattr(st, 'secrets') and 'GREENFORGE_DEV_MODE' in st.secrets:
+                    dev_mode = str(st.secrets['GREENFORGE_DEV_MODE']).lower() == "true"
+                    if dev_mode:
+                        logger.warning("⚠️ DEVELOPMENT MODE - Authorization bypassed (from Streamlit secrets)")
+            except Exception as e:
+                logger.debug(f"Could not read Streamlit secrets: {e}")
+
+        # Fall back to environment variable
+        if not dev_mode:
+            dev_mode = os.getenv("GREENFORGE_DEV_MODE", "false").lower() == "true"
+            if dev_mode:
+                logger.warning("⚠️ DEVELOPMENT MODE - Authorization bypassed (from environment)")
+
+        if dev_mode:
+            return True
+
         # Try license key validation first
         try:
             return LicenseValidator.validate_license_key()
@@ -173,7 +223,11 @@ def check_authorization() -> None:
 
 
 # Automatic authorization check on import (optional, can be disabled)
-AUTO_CHECK_ON_IMPORT = os.getenv("GREENFORGE_AUTO_CHECK", "true").lower() == "true"
+# Disabled by default for Streamlit to prevent blocking the app
+if RUNNING_IN_STREAMLIT:
+    AUTO_CHECK_ON_IMPORT = os.getenv("GREENFORGE_AUTO_CHECK", "false").lower() == "true"
+else:
+    AUTO_CHECK_ON_IMPORT = os.getenv("GREENFORGE_AUTO_CHECK", "true").lower() == "true"
 
 if AUTO_CHECK_ON_IMPORT:
     try:
