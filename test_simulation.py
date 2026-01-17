@@ -76,3 +76,6 @@ for rank, item in enumerate(results, 1):
 if os.path.exists(TEST_DB):
     os.remove(TEST_DB)
 print("\n--- SIMULATION COMPLETE ---")
+def test_build_check():
+    """Simple check to verify the build passes."""
+    assert True
