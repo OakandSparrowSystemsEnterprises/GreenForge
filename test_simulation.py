@@ -1,27 +1,28 @@
+/home/user/GreenForge/test_simulation_resolved.py
 import os
 # Bypass authorization for GitHub Actions and CI/CD
 os.environ["GREENFORGE_DEV_MODE"] = "true"
-
+ 
 import sqlite3
 import pytest
 from Engine.logic import IntegratedPharmacognosyEngine
-
-
+ 
+ 
 @pytest.fixture(scope="module")
 def test_database():
     """Create a temporary test database with sample compounds."""
     TEST_DB = "test_pharma.db"
     if os.path.exists(TEST_DB):
         os.remove(TEST_DB)
-
+ 
     conn = sqlite3.connect(TEST_DB)
     cursor = conn.cursor()
-
+ 
     # Create Tables
     cursor.execute("CREATE TABLE terpenes (name TEXT, boiling_point REAL)")
     cursor.execute("CREATE TABLE cannabinoids (name TEXT, boiling_point REAL)")
     cursor.execute("CREATE TABLE flavonoids (name TEXT, boiling_point REAL)")
-
+ 
     # Insert Boiling Points (Physics Data)
     cursor.execute("INSERT INTO cannabinoids VALUES ('THC', 315)")
     cursor.execute("INSERT INTO terpenes VALUES ('Myrcene', 334)")
@@ -32,26 +33,26 @@ def test_database():
     cursor.execute("INSERT INTO flavonoids VALUES ('Cannflavin A', 360)")
     conn.commit()
     conn.close()
-
+ 
     yield TEST_DB
-
+ 
     # Cleanup after tests
     if os.path.exists(TEST_DB):
         os.remove(TEST_DB)
-
-
+ 
+ 
 @pytest.fixture(scope="module")
 def engine(test_database):
     """Initialize the GreenForge engine with test database."""
     return IntegratedPharmacognosyEngine(test_database, "dummy_kb.db")
-
-
+ 
+ 
 def test_engine_initialization(engine):
     """Test that the engine initializes successfully."""
     assert engine is not None
     assert engine.pharma_db_path is not None
-
-
+ 
+ 
 def test_hype_strain_vs_medical_strain(engine):
     """Test that medical strains score higher than high-THC hype strains."""
     # Product A: The "Inflated" Street Strain (High THC, No Soul)
@@ -63,7 +64,7 @@ def test_hype_strain_vs_medical_strain(engine):
             {"name": "Myrcene", "type": "terpene", "val": 0.1}
         ]
     }
-
+ 
     # Product B: The "Medical" Strain (Moderate THC, High Entourage)
     product_med = {
         "name": "Entourage Kush (18% THC)",
@@ -74,16 +75,16 @@ def test_hype_strain_vs_medical_strain(engine):
             {"name": "Linalool", "type": "terpene", "val": 0.8}
         ]
     }
-
+ 
     user_profile = {'interface_temp': 365}
     results = engine.rank_products_integrated(user_profile, [product_hype, product_med])
-
+ 
     # Medical strain should score higher due to entourage effect
     assert len(results) == 2
     assert results[0]['name'] == "Entourage Kush (18% THC)"
     assert results[0]['matchScore'] > results[1]['matchScore']
-
-
+ 
+ 
 def test_neuropathic_pain_optimal_formulation(engine):
     """Test that the Neuropathic Pain preset achieves high match score."""
     product = {
@@ -96,15 +97,15 @@ def test_neuropathic_pain_optimal_formulation(engine):
             {"name": "Cannflavin A", "type": "flavonoid", "val": 0.2}
         ]
     }
-
+ 
     user_profile = {'interface_temp': 370}
     results = engine.rank_products_integrated(user_profile, [product])
-
+ 
     assert len(results) == 1
     # Should achieve high match score (close to 100%)
     assert results[0]['matchScore'] >= 80.0
-
-
+ 
+ 
 def test_adhd_focus_optimal_formulation(engine):
     """Test that the ADHD/Focus preset achieves high match score."""
     product = {
@@ -116,15 +117,15 @@ def test_adhd_focus_optimal_formulation(engine):
             {"name": "Limonene", "type": "terpene", "val": 1.5}
         ]
     }
-
+ 
     user_profile = {'interface_temp': 350}
     results = engine.rank_products_integrated(user_profile, [product])
-
+ 
     assert len(results) == 1
     # Should achieve high match score
     assert results[0]['matchScore'] >= 80.0
-
-
+ 
+ 
 def test_thermal_activation_standard_temp(engine):
     """Test thermal activation at standard vaping temperature (365°F)."""
     product = {
@@ -135,15 +136,15 @@ def test_thermal_activation_standard_temp(engine):
             {"name": "Myrcene", "type": "terpene", "val": 1.5}
         ]
     }
-
+ 
     user_profile = {'interface_temp': 365}
     results = engine.rank_products_integrated(user_profile, [product])
-
+ 
     assert len(results) == 1
     # Both THC (315°F) and Myrcene (334°F) should be activated
     assert results[0]['matchScore'] > 0
-
-
+ 
+ 
 def test_thermal_activation_high_temp(engine):
     """Test thermal activation at high temperature (400°F)."""
     product = {
@@ -154,15 +155,15 @@ def test_thermal_activation_high_temp(engine):
             {"name": "Myrcene", "type": "terpene", "val": 1.5}
         ]
     }
-
+ 
     user_profile = {'interface_temp': 400}
     results = engine.rank_products_integrated(user_profile, [product])
-
+ 
     assert len(results) == 1
     # High temp may cause degradation
     assert results[0]['matchScore'] >= 0
-
-
+ 
+ 
 def test_build_check():
     """Simple check to verify the build passes."""
     assert True
