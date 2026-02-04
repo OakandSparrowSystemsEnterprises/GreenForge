@@ -181,18 +181,25 @@ def calculate_thermal_availability(compounds: List[Compound], temp_f: float) -> 
             bp_f = data["boiling_point_f"]
             temp_margin = temp_f - bp_f
             
-            # DEGRADATION DETECTION (NEW LOGIC)
-            if compound.name.upper() in ['THC', 'CBD', 'CBN', 'CBG', 'THCV', 'CBC'] and temp_margin > 90:
-                # Cannabinoids oxidize and degrade >90°F above boiling point
-                availability[compound.name] = 0.6  # Reduced availability due to degradation
+            degradation_start_offset = 40  # Degrees F above boiling point where degradation begins
+            degradation_rate = 0.02       # Rate of availability loss per degree F above the offset
+            
+            compound_type = data.get("type")
+
+            # Handle degradation for volatile compounds (cannabinoids and terpenes)
+            if compound_type in ['cannabinoid', 'terpene'] and temp_f > bp_f + degradation_start_offset:
+                excess_heat = temp_f - (bp_f + degradation_start_offset)
+                degradation_factor = max(0.0, 1.0 - (excess_heat * degradation_rate))
+                
+                availability[compound.name] = degradation_factor
                 details[compound.name] = {
-                    "available": 0.6,
+                    "available": round(degradation_factor, 2),
                     "boiling_point_f": bp_f,
                     "status": "degrading",
-                    "temp_margin": round(temp_margin, 1),
-                    "warning": f"⚠️ {round(temp_margin)}°F above optimal - oxidation risk"
+                    "temp_margin": round(temp_f - bp_f, 1),
+                    "warning": f"⚠️ Degrading at {round(temp_f - bp_f, 1)}°F above boiling point"
                 }
-            
+            # If not degrading or compound type doesn't degrade this way, check other statuses
             elif temp_f >= bp_f:
                 # Full availability above boiling point (but not overheated)
                 availability[compound.name] = 1.0
@@ -200,9 +207,8 @@ def calculate_thermal_availability(compounds: List[Compound], temp_f: float) -> 
                     "available": 1.0,
                     "boiling_point_f": bp_f,
                     "status": "fully_active",
-                    "temp_margin": round(temp_margin, 1)
+                    "temp_margin": round(temp_f - bp_f, 1)
                 }
-            
             elif temp_f >= (bp_f - 36):  # 36°F = 20°C gradient
                 # Partial availability within 36°F of boiling point
                 availability[compound.name] = (temp_f - (bp_f - 36)) / 36
@@ -212,7 +218,6 @@ def calculate_thermal_availability(compounds: List[Compound], temp_f: float) -> 
                     "status": "partially_active",
                     "needed_temp_f": round(bp_f, 1)
                 }
-            
             else:
                 # Locked below threshold
                 availability[compound.name] = 0.0
@@ -349,6 +354,7 @@ def calculate_quantum_match(
     for condition in conditions:
         cond_name = condition.name.lower()
         severity = condition.severity
+        base_score = 0.0
         
         # Check for recreational intent
         rec_goals = ["blitzed", "high", "stoned", "faded", "blasted", "get high"]
@@ -374,7 +380,7 @@ def calculate_quantum_match(
             for c in compounds:
                 if c.name.upper() in ['THCV', 'ALPHA-PINENE', 'PINENE', 'LIMONENE']:
                     # Apply cultivation modifiers
-                    modified_val = apply_cultivation_modifiers(c.name, "terpene", grow_style, c.val)
+                    modified_val = apply_cultivation_modifiers(c.name, "cannabinoid", grow_style, c.val)
                     # Apply thermal availability
                     signal += modified_val * availability.get(c.name, 1.0)
             
@@ -404,24 +410,23 @@ def calculate_quantum_match(
                     therapeutic_signal += modified_val * availability.get(c.name, 1.0)
                 
                 # RESEARCH: Cannflavin A = 30x aspirin potency for pain/inflammation
-                if 'cannflavin' in c.name.lower() and 'pain' in cond_name or 'inflammation' in cond_name:
+                # FIX: Corrected OR precedence to ensure this only applies to Cannflavin when pain/inflammation is present.
+                if ('cannflavin' in c.name.lower() and ('pain' in cond_name or 'inflammation' in cond_name)):
                     modified_val = apply_cultivation_modifiers(c.name, "flavonoid", grow_style, c.val)
                     avail = availability.get(c.name, 0.0)
-                    
                     if avail > 0:
-                        # Apply 30x multiplier if thermally available
                         cannflavin_boost = 30.0
-                        therapeutic_signal += modified_val * avail * 5.0  # High weighting
+                        therapeutic_signal += modified_val * avail * 5.0
                         warnings.append(f"✓ Cannflavin A active: 30x aspirin anti-inflammatory potency @ {temp_f}°F")
                     else:
-                        bp = thermal_data["details"][c.name].get("boiling_point_f", 0)
+                        bp = thermal_data["details"].get(c.name, {}).get("boiling_point_f", 0)
                         warnings.append(f"🔒 Cannflavin A locked (needs {bp}°F, currently {temp_f}°F)")
             
             # Apply soil-grown flavonoid bonus
             flavonoid_bonus = 1.0
             if grow_style.lower() in ['soil', 'living_soil', 'organic', 'living-soil']:
                 if cannflavin_boost > 1.0:
-                    flavonoid_bonus = 1.3  # Soil enhances flavonoid expression
+                    flavonoid_bonus = 1.3
                     warnings.append("✓ Living soil cultivation: Enhanced flavonoid bioavailability")
             
             base_score = ((therapeutic_signal * 8) + (thc * 1.2)) * flavonoid_bonus * cannflavin_boost
@@ -478,7 +483,7 @@ def calculate_quantum_match(
             and 'needed_temp_f' in thermal_data['details'].get(c.name, {})
         ]
         if locked_compounds:
-            thermal_penalty = 0.3
+            thermal_penalty = 0.8  # Reduced penalty for locked compounds
             warnings.append(f"🔒 Thermal gate locked: {', '.join(locked_compounds)}")
         
         base_score *= thermal_penalty
@@ -647,6 +652,8 @@ async def get_thermal_zones():
         }
     ]
     return {"zones": zones, "research_citation": "Cannabis Biosynthesis PDF"}
+
+
 @router.get("/strains/{strain_name}")
 async def get_strain_variants(strain_name: str):
     """Get all grow context variants for a strain from Phase 1 library."""
