@@ -39,8 +39,15 @@ def celsius_to_fahrenheit(celsius: float) -> float:
     return round(celsius * 1.8 + 32, 1)
 
 
+# Global cache for compound data to prevent N+1 query overhead
+COMPOUND_DATA_CACHE = {}
+
 def get_compound_data(compound_name: str) -> Dict[str, Any] | None:
-    """Retrieve full compound data including boiling point and multipliers."""
+    """Retrieve full compound data with internal caching and dynamic schema handling."""
+    name_upper = compound_name.upper()
+    if name_upper in COMPOUND_DATA_CACHE:
+        return COMPOUND_DATA_CACHE[name_upper]
+        
     if not os.path.exists(DB_PATH):
         return None
     
@@ -49,75 +56,45 @@ def get_compound_data(compound_name: str) -> Dict[str, Any] | None:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Check cannabinoids
-        try:
-            cursor.execute(
-                "SELECT name, boiling_point FROM cannabinoids WHERE name = ? COLLATE NOCASE", 
-                (compound_name,)
-            )
-            row = cursor.fetchone()
-            if row:
-                return {
-                    "name": row[0], 
-                    "boiling_point_c": float(row[1]),
-                    "boiling_point_f": celsius_to_fahrenheit(float(row[1])),
-                    "type": "cannabinoid"
-                }
-        except sqlite3.Error:
-            pass
+        # Tables and their corresponding types
+        tables = [
+            ("cannabinoids", "cannabinoid"),
+            ("terpenes", "terpene"),
+            ("flavonoids", "flavonoid"),
+            ("minor_cannabinoids", "minor_cannabinoid")
+        ]
         
-        # Check terpenes
-        try:
-            cursor.execute(
-                "SELECT name, boiling_point FROM terpenes WHERE name = ? COLLATE NOCASE", 
-                (compound_name,)
-            )
-            row = cursor.fetchone()
-            if row:
-                return {
-                    "name": row[0], 
-                    "boiling_point_c": float(row[1]),
-                    "boiling_point_f": celsius_to_fahrenheit(float(row[1])),
-                    "type": "terpene"
-                }
-        except sqlite3.Error:
-            pass
-        
-        # Check flavonoids with synergy multiplier
-        try:
-            cursor.execute(
-                "SELECT name, boiling_point, synergy_multiplier FROM flavonoids WHERE name = ? COLLATE NOCASE", 
-                (compound_name,)
-            )
-            row = cursor.fetchone()
-            if row:
-                return {
-                    "name": row[0], 
-                    "boiling_point_c": float(row[1]),
-                    "boiling_point_f": celsius_to_fahrenheit(float(row[1])),
-                    "synergy_multiplier": float(row[2]) if row[2] else 1.0,
-                    "type": "flavonoid"
-                }
-        except sqlite3.Error:
-            pass
-        
-        # Check minor cannabinoids
-        try:
-            cursor.execute(
-                "SELECT name, boiling_point, efficacy_weight FROM minor_cannabinoids WHERE name = ? COLLATE NOCASE", 
-                (compound_name,)
-            )
-            row = cursor.fetchone()
-            if row:
-                return {
-                    "name": row[0], 
-                    "boiling_point_c": float(row[1]),
-                    "boiling_point_f": celsius_to_fahrenheit(float(row[1])),
-                    "efficacy_weight": float(row[2]) if row[2] else 1.0,
-                    "type": "minor_cannabinoid"
-                }
-        except sqlite3.Error:
-            pass
+        for table, c_type in tables:
+            try:
+                # Dynamically fetch columns to handle schema variations
+                cursor.execute(f"PRAGMA table_info({table})")
+                cols = [c[1] for c in cursor.fetchall()]
+                
+                cursor.execute(f"SELECT * FROM {table} WHERE name = ? COLLATE NOCASE", (compound_name,))
+                row = cursor.fetchone()
+                
+                if row:
+                    data = {"name": row[0], "type": c_type}
+                    
+                    # Map boiling point correctly
+                    if 'boiling_point' in cols:
+                        idx = cols.index('boiling_point')
+                        if row[idx] is not None:
+                            data["boiling_point_c"] = float(row[idx])
+                            data["boiling_point_f"] = celsius_to_fahrenheit(float(row[idx]))
+                    
+                    # Map multipliers and weights
+                    if 'synergy_multiplier' in cols:
+                        data["synergy_multiplier"] = float(row[cols.index('synergy_multiplier')]) if row[cols.index('synergy_multiplier')] else 1.0
+                    elif 'potency_multiplier' in cols: # Support legacy schema
+                        data["synergy_multiplier"] = float(row[cols.index('potency_multiplier')]) if row[cols.index('potency_multiplier')] else 1.0
+                    elif 'efficacy_weight' in cols:
+                        data["efficacy_weight"] = float(row[cols.index('efficacy_weight')]) if row[cols.index('efficacy_weight')] else 1.0
+                        
+                    COMPOUND_DATA_CACHE[name_upper] = data
+                    return data
+            except (sqlite3.Error, ValueError):
+                continue
         
         return None
     finally:
@@ -312,29 +289,25 @@ def calculate_quantum_match(
     grow_style: str
 ) -> Dict[str, Any]:
     """
-    Integrated pharmacognosy engine with all research-based logic blocks.
+    Integrated pharmacognosy engine with multi-profile condition matching.
     """
     
-    if not compounds:
+    if not compounds or not conditions:
         return {
             "score": 0.0,
-            "breakdown": {"error": "No compounds provided"},
-            "warnings": ["Empty product"],
+            "breakdown": {"error": "Missing inputs"},
+            "warnings": ["Empty request"],
             "thermal_details": {}
         }
     
-    if not conditions:
-        return {
-            "score": 0.0,
-            "breakdown": {"error": "No conditions provided"},
-            "warnings": ["No conditions specified"],
-            "thermal_details": {}
-        }
-    
-    # Extract key compounds (case-insensitive)
+    # Pre-fetch compound metadata to fix type-casting bugs and avoid redundant DB calls
+    compound_metadata = {}
+    for c in compounds:
+        data = get_compound_data(c.name)
+        compound_metadata[c.name.upper()] = data.get("type", "unknown") if data else "unknown"
+
     compound_dict = {c.name.upper(): c.val for c in compounds}
     thc = compound_dict.get('THC', 0.0)
-    cbd = compound_dict.get('CBD', 0.0)
     
     # Calculate thermal availability
     thermal_data = calculate_thermal_availability(compounds, temp_f)
@@ -354,7 +327,6 @@ def calculate_quantum_match(
     for condition in conditions:
         cond_name = condition.name.lower()
         severity = condition.severity
-        base_score = 0.0
         
         # Check for recreational intent
         rec_goals = ["blitzed", "high", "stoned", "faded", "blasted", "get high"]
@@ -364,139 +336,120 @@ def calculate_quantum_match(
             breakdown[condition.name] = {"score": 100.0, "mode": "recreational"}
             continue
         
-        # Categorize condition
+        # Clinical Profile Matching (Independent Checks for Overlap)
+        applicable_scores = []
+        profile_details = {}
+        
+        # 1. Cognitive Profile
         cognitive_needs = ["adhd", "focus", "clarity", "studying", "concentration", "memory"]
-        somatic_needs = ["sleep", "insomnia", "pain", "inflammation", "nerve", "neuropathic", "migraine"]
-        anxiety_needs = ["anxiety", "stress", "panic", "worry"]
-        
-        is_cognitive = any(need in cond_name for need in cognitive_needs)
-        is_somatic = any(need in cond_name for need in somatic_needs)
-        is_anxiety = any(need in cond_name for need in anxiety_needs)
-        
-        # Calculate base effectiveness with cultivation modifiers
-        if is_cognitive:
-            # Cognitive needs: penalize high THC, reward focus compounds
+        if any(need in cond_name for need in cognitive_needs):
             signal = 0.0
             for c in compounds:
                 if c.name.upper() in ['THCV', 'ALPHA-PINENE', 'PINENE', 'LIMONENE']:
-                    # Apply cultivation modifiers
-                    modified_val = apply_cultivation_modifiers(c.name, "cannabinoid", grow_style, c.val)
-                    # Apply thermal availability
+                    c_type = compound_metadata.get(c.name.upper(), "terpene")
+                    modified_val = apply_cultivation_modifiers(c.name, c_type, grow_style, c.val)
                     signal += modified_val * availability.get(c.name, 1.0)
             
-            noise_penalty = max(0, (thc - 10) * 3.0)
-            base_score = (signal * 40) - noise_penalty
-            
+            penalty = max(0, (thc - 10) * 3.0)
+            score = (signal * 40) - penalty
+            applicable_scores.append(score)
+            profile_details["cognitive"] = {"signal": round(signal, 2), "penalty": round(penalty, 1)}
             if thc > 20:
-                warnings.append(f"⚠️ High THC ({thc}%) may impair cognitive function")
-            if signal < 1.0:
-                warnings.append("Low focus compound levels")
-            
-            breakdown[condition.name] = {
-                "score": round(base_score, 1),
-                "mode": "cognitive",
-                "signal": round(signal, 2),
-                "thc_penalty": round(noise_penalty, 1)
-            }
-        
-        elif is_somatic:
-            # Somatic needs: synergy between THC and therapeutic compounds
+                warnings.append(f"⚠️ High THC ({thc}%) may impair focus for {condition.name}")
+
+        # 2. Somatic Profile (Pain, Sleep, Inflammation)
+        somatic_needs = ["sleep", "insomnia", "pain", "inflammation", "nerve", "neuropathic", "migraine"]
+        if any(need in cond_name for need in somatic_needs):
             therapeutic_signal = 0.0
             cannflavin_boost = 1.0
             
             for c in compounds:
-                if c.name.upper() in ['CBD', 'CBN', 'CBG', 'MYRCENE', 'CARYOPHYLLENE', 'Β-CARYOPHYLLENE']:
-                    modified_val = apply_cultivation_modifiers(c.name, "terpene", grow_style, c.val)
+                name_u = c.name.upper()
+                c_type = compound_metadata.get(name_u, "unknown")
+                
+                if name_u in ['CBD', 'CBN', 'CBG', 'MYRCENE', 'CARYOPHYLLENE', 'Β-CARYOPHYLLENE']:
+                    modified_val = apply_cultivation_modifiers(c.name, c_type, grow_style, c.val)
                     therapeutic_signal += modified_val * availability.get(c.name, 1.0)
                 
-                # RESEARCH: Cannflavin A = 30x aspirin potency for pain/inflammation
-                # FIX: Corrected OR precedence to ensure this only applies to Cannflavin when pain/inflammation is present.
-                if ('cannflavin' in c.name.lower() and ('pain' in cond_name or 'inflammation' in cond_name)):
-                    modified_val = apply_cultivation_modifiers(c.name, "flavonoid", grow_style, c.val)
+                # Cannflavin A research check
+                if 'cannflavin' in c.name.lower() and ('pain' in cond_name or 'inflammation' in cond_name):
                     avail = availability.get(c.name, 0.0)
                     if avail > 0:
                         cannflavin_boost = 30.0
-                        therapeutic_signal += modified_val * avail * 5.0
-                        warnings.append(f"✓ Cannflavin A active: 30x aspirin anti-inflammatory potency @ {temp_f}°F")
+                        therapeutic_signal += c.val * avail * 5.0
+                        warnings.append(f"✓ Cannflavin A active (30x potency) for {condition.name}")
                     else:
                         bp = thermal_data["details"].get(c.name, {}).get("boiling_point_f", 0)
-                        warnings.append(f"🔒 Cannflavin A locked (needs {bp}°F, currently {temp_f}°F)")
+                        warnings.append(f"🔒 Cannflavin A locked (needs {bp}°F) for {condition.name}")
             
-            # Apply soil-grown flavonoid bonus
-            flavonoid_bonus = 1.0
-            if grow_style.lower() in ['soil', 'living_soil', 'organic', 'living-soil']:
-                if cannflavin_boost > 1.0:
-                    flavonoid_bonus = 1.3
-                    warnings.append("✓ Living soil cultivation: Enhanced flavonoid bioavailability")
-            
-            base_score = ((therapeutic_signal * 8) + (thc * 1.2)) * flavonoid_bonus * cannflavin_boost
-            
-            breakdown[condition.name] = {
-                "score": round(base_score, 1),
-                "mode": "somatic",
-                "signal": round(therapeutic_signal, 2),
-                "thc_contribution": round(thc * 1.2, 1),
-                "flavonoid_bonus": flavonoid_bonus,
-                "cannflavin_multiplier": cannflavin_boost
-            }
-        
-        elif is_anxiety:
-            # Anxiety needs: CBD, calming terpenes, minimal THC
+            f_bonus = 1.3 if grow_style.lower() in ['soil', 'living_soil', 'organic'] and cannflavin_boost > 1.0 else 1.0
+            score = ((therapeutic_signal * 8) + (thc * 1.2)) * f_bonus * cannflavin_boost
+            applicable_scores.append(score)
+            profile_details["somatic"] = {"signal": round(therapeutic_signal, 2), "boost": cannflavin_boost}
+
+        # 3. Anxiety Profile
+        anxiety_needs = ["anxiety", "stress", "panic", "worry"]
+        if any(need in cond_name for need in anxiety_needs):
             calming_signal = 0.0
-            
             for c in compounds:
                 if c.name.upper() in ['CBD', 'LINALOOL', 'LIMONENE', 'MYRCENE', 'CBN', 'APIGENIN']:
-                    modified_val = apply_cultivation_modifiers(c.name, "terpene", grow_style, c.val)
+                    c_type = compound_metadata.get(c.name.upper(), "unknown")
+                    modified_val = apply_cultivation_modifiers(c.name, c_type, grow_style, c.val)
                     calming_signal += modified_val * availability.get(c.name, 1.0)
             
             thc_anxiety_penalty = max(0, (thc - 5) * 2.0)
-            base_score = (calming_signal * 15) - thc_anxiety_penalty
-            
+            score = (calming_signal * 15) - thc_anxiety_penalty
+            applicable_scores.append(score)
+            profile_details["anxiety"] = {"signal": round(calming_signal, 2), "penalty": round(thc_anxiety_penalty, 1)}
             if thc > 15:
-                warnings.append(f"⚠️ High THC ({thc}%) may exacerbate anxiety")
-            
-            breakdown[condition.name] = {
-                "score": round(base_score, 1),
-                "mode": "anxiety",
-                "signal": round(calming_signal, 2),
-                "thc_penalty": round(thc_anxiety_penalty, 1)
-            }
-        
-        else:
-            # General wellness
-            base_score = sum(
-                apply_cultivation_modifiers(c.name, "cannabinoid", grow_style, c.val) * 
+                warnings.append(f"⚠️ High THC ({thc}%) may exacerbate anxiety for {condition.name}")
+
+        # Final Score Calculation for this Condition
+        if not applicable_scores:
+            # General wellness if no specific profile matched
+            condition_score = sum(
+                apply_cultivation_modifiers(c.name, compound_metadata.get(c.name.upper(), "cannabinoid"), grow_style, c.val) * 
                 availability.get(c.name, 1.0) 
                 for c in compounds
             ) * 3
-            breakdown[condition.name] = {
-                "score": round(base_score, 1),
-                "mode": "general"
-            }
+            profile_details["mode"] = "general_wellness"
+        else:
+            # Average score from all matching profiles
+            condition_score = sum(applicable_scores) / len(applicable_scores)
+            profile_details["mode"] = "integrated_clinical"
+
+        # Apply Global Thermal Gate Penalty
+        locked = [f"{c.name}" for c in compounds if availability.get(c.name, 1.0) < 0.5 and c.val > 0.5]
+        thermal_mult = 0.8 if locked else 1.0
+        condition_score *= thermal_mult
         
-        # Apply thermal gate penalties
-        thermal_penalty = 1.0
-        locked_compounds = [
-            f"{c.name} (needs {thermal_data['details'][c.name]['needed_temp_f']}°F)"
-            for c in compounds 
-            if availability.get(c.name, 1.0) < 0.5 and c.val > 0.5 
-            and 'needed_temp_f' in thermal_data['details'].get(c.name, {})
-        ]
-        if locked_compounds:
-            thermal_penalty = 0.8  # Reduced penalty for locked compounds
-            warnings.append(f"🔒 Thermal gate locked: {', '.join(locked_compounds)}")
-        
-        base_score *= thermal_penalty
-        
-        # Apply entourage effect
+        # Apply Entourage Synergy
         entourage = calculate_entourage_effect(compounds, availability)
-        if entourage["multiplier"] > 1.0:
-            breakdown[condition.name]["entourage"] = entourage
-            base_score *= entourage["multiplier"]
+        condition_score *= entourage["multiplier"]
         
-        # Weight by severity
-        total_score += base_score * severity
+        profile_details["score"] = round(condition_score, 1)
+        breakdown[condition.name] = profile_details
+        
+        # Weight by Severity
+        total_score += condition_score * severity
         total_weight += severity
+    
+    # Final Result
+    final_score = round(min(100.0, max(0.0, total_score / total_weight)), 1) if total_weight > 0 else 0.0
+    
+    # Market reality check
+    if thc > 25 and sum(c.val for c in compounds if c.name.upper() != 'THC') < 2.0:
+        warnings.append("⚠️ MARKET REALITY: High THC, low therapeutic compound profile")
+    
+    return {
+        "score": final_score,
+        "breakdown": breakdown,
+        "warnings": list(set(warnings)), # Deduplicate warnings
+        "thermal_details": thermal_data["details"],
+        "safety_zone": safety,
+        "cultivation_modifiers_applied": True
+    }
+
     
     # Calculate final weighted score
     final_score = (total_score / total_weight) if total_weight > 0 else 0.0
