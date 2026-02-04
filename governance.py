@@ -8,7 +8,7 @@ from decimal import Decimal, Context, ROUND_HALF_UP
 # =============================================================================
 CANONICAL_UNIT = "°C"
 GF_QUANT = Decimal("0.0001")
-GF_CONTEXT = Context(prec=6, rounding=ROUND_HALF_UP)
+GF_CONTEXT = Context(prec=12, rounding=ROUND_HALF_UP)
 
 class ThermalState(Enum):
     LOCKED = auto()
@@ -51,27 +51,45 @@ def evaluate_gate_state(temp_c: float, compound_threshold_c: float) -> ThermalSt
 # LOGIC GASKET: THE IMPORT-TIME DIAGNOSTIC
 # =============================================================================
 
+# --- change this ---
+GF_CONTEXT = Context(prec=12, rounding=ROUND_HALF_UP)  # was prec=6
+
 def _run_production_audit():
     """Mandatory logic gasket. Failure prevents engine initialization."""
     thc_threshold_c = 315.0
-    
-    # Unit Boundary Lock
-    if f_to_c(470.0) != 243.3333:
-        raise RuntimeError("CRITICAL: F-to-C Conversion Drift.")
-    
-    # Gate Logic Lock (Explicit Checks)
-    if evaluate_gate_state(243.3333, thc_threshold_c) != ThermalState.LOCKED:
+
+    # Unit Boundary Lock (Decimal-to-Decimal, quantized)
+    expected = GF_CONTEXT.divide(
+        (Decimal("470.0") - Decimal("32.0")) * Decimal("5.0"),
+        Decimal("9.0")
+    ).quantize(GF_QUANT, context=GF_CONTEXT)
+
+    actual = Decimal(str(f_to_c(470.0))).quantize(GF_QUANT, context=GF_CONTEXT)
+
+    if actual != expected:
+        raise RuntimeError(f"CRITICAL: F-to-C Conversion Drift. Expected {expected}, got {actual}")
+
+    # Gate Logic Lock
+    if evaluate_gate_state(float(actual), thc_threshold_c) != ThermalState.LOCKED:
         raise RuntimeError("Gate Drift: expected LOCKED below threshold")
-    
+
     if evaluate_gate_state(343.3333, thc_threshold_c) != ThermalState.UNLOCKED:
         raise RuntimeError("Gate Drift: expected UNLOCKED above threshold")
-    
+
     # Poison Handling Validation
     for bad_val in [float('nan'), float('inf')]:
         try:
             f_to_c(bad_val)
             raise RuntimeError("Poison Leak: f_to_c failed to raise on NaN/Inf")
-        except ValueError: pass
+        except ValueError:
+            pass
+
+        try:
+            evaluate_gate_state(bad_val, thc_threshold_c)
+            raise RuntimeError("Poison Leak: evaluate_gate_state failed to raise on NaN/Inf")
+        except ValueError:
+            pass
+
 
 # ENGAGE LOCK
 try:
