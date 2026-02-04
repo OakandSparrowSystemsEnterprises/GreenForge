@@ -2,9 +2,13 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import os
+import logging
 
-# --- IMPORT YOUR ENGINE DIRECTLY ---
-# This allows us to run without a separate API server
+# --- IMPORT GOVERNANCE LAYER ---
+# Rule: If governance.py fails its internal audit, this import will crash the app.
+from governance import ThermalState, f_to_c, evaluate_gate_state, state_label, CANONICAL_UNIT
+
+# --- IMPORT ENGINE ---
 from Engine.logic import IntegratedPharmacognosyEngine
 
 # --- PAGE CONFIG ---
@@ -19,106 +23,79 @@ custom_css = '''
     border: 1px solid rgba(102, 126, 234, 0.3);
     padding: 20px;
     border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
 }
-.stSlider > div > div > div > div { 
-    background: linear-gradient(to right, #667eea, #764ba2);
-}
-.success-box {
-    background: rgba(74, 222, 128, 0.1);
-    border-left: 4px solid #4ade80;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 10px 0;
-}
-.warning-box {
-    background: rgba(251, 191, 36, 0.1);
-    border-left: 4px solid #fbbf24;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 10px 0;
-}
-.error-box {
-    background: rgba(239, 68, 68, 0.1);
-    border-left: 4px solid #ef4444;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 10px 0;
-}
-/* Fix cursor */
-div[data-baseweb="select"] > div, 
-div[data-baseweb="select"] input {
-    cursor: pointer !important;
-}
+.success-box { background: rgba(74, 222, 128, 0.1); border-left: 4px solid #4ade80; padding: 15px; border-radius: 8px; margin: 10px 0; }
+.warning-box { background: rgba(251, 191, 36, 0.1); border-left: 4px solid #fbbf24; padding: 15px; border-radius: 8px; margin: 10px 0; }
+.error-box { background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; padding: 15px; border-radius: 8px; margin: 10px 0; }
 </style>
 '''
 st.markdown(custom_css, unsafe_allow_html=True)
 
 # --- CLOUD DATABASE SETUP ---
-# We use @st.cache_resource so this only runs once when the app boots up
 @st.cache_resource
 def get_engine():
-    # Define a local path for the database
     db_path = "greenforge_cloud.db"
-    
-    # Force a fresh build of the database to ensure it has data
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # 1. Clear old data
+    # 1. Clear and Rebuild (Ensures schema matches logic)
     cursor.execute("DROP TABLE IF EXISTS terpenes")
     cursor.execute("DROP TABLE IF EXISTS cannabinoids")
     cursor.execute("DROP TABLE IF EXISTS flavonoids")
 
-    # 2. Create Tables
     cursor.execute("CREATE TABLE terpenes (name TEXT PRIMARY KEY, boiling_point REAL)")
     cursor.execute("CREATE TABLE cannabinoids (name TEXT PRIMARY KEY, boiling_point REAL)")
     cursor.execute("CREATE TABLE flavonoids (name TEXT PRIMARY KEY, boiling_point REAL)")
 
-    # 3. Insert Data
-    cannabinoids = [("THC", 315), ("CBD", 356), ("CBG", 126), ("CBN", 365), 
-                    ("THCV", 428), ("THCP", 315), ("CBC", 428)]
-    terpenes = [("Myrcene", 334), ("Limonene", 349), ("Alpha-Pinene", 311), 
-                ("Linalool", 388), ("Caryophyllene", 266), ("Humulene", 225), 
-                ("Terpinolene", 365), ("Borneol", 410)]
-    flavonoids = [("Cannflavin A", 360), ("Cannflavin B", 360), 
-                  ("Quercetin", 482), ("Apigenin", 352)]
-                  
+    # Data includes Celsius boiling points
+    cannabinoids = [("THC", 315), ("CBD", 356), ("CBG", 126), ("CBN", 365), ("THCV", 428), ("THCP", 315), ("CBC", 428)]
+    terpenes = [("Myrcene", 334), ("Limonene", 349), ("Alpha-Pinene", 311), ("Linalool", 388), ("Caryophyllene", 266), ("Humulene", 225), ("Terpinolene", 365), ("Borneol", 410)]
+    flavonoids = [("Cannflavin A", 360), ("Cannflavin B", 360), ("Quercetin", 482), ("Apigenin", 352)]
+                      
     cursor.executemany("INSERT INTO cannabinoids VALUES (?, ?)", cannabinoids)
     cursor.executemany("INSERT INTO terpenes VALUES (?, ?)", terpenes)
     cursor.executemany("INSERT INTO flavonoids VALUES (?, ?)", flavonoids)
     conn.commit()
     conn.close()
     
-    # Initialize the Engine with this new database
     return IntegratedPharmacognosyEngine(db_path, "dummy_kb.db")
 
-# Initialize the engine
 engine = get_engine()
 
 # --- APP UI START ---
 st.title("🧬 GreenForge: Computational Pharmacognosy Engine")
 st.subheader("Research-Based Medical Cannabis Analysis with Thermal Modeling")
 
-# --- SIDEBAR ---
+# --- SIDEBAR: THERMAL GOVERNANCE ---
 with st.sidebar:
     st.header("👤 Patient Profile")
     condition = st.selectbox("Primary Condition", 
-        ["Neuropathic Pain", "Migraine", "ADHD/Focus", "Insomnia", "Anxiety", 
-         "Chronic Inflammation", "Depression", "Get High"])
+        ["Neuropathic Pain", "Migraine", "ADHD/Focus", "Insomnia", "Anxiety", "Chronic Inflammation", "Depression"])
     severity = st.slider("Severity Level", 1, 10, 8)
     
     st.divider()
     st.header("🌡️ Thermal Interface")
+    
+    # Capture Fahrenheit input
     temp_f = st.slider("Device Temperature (°F)", 300, 500, 350, step=5)
     
+    # MANDATORY CONVERSION: f_to_c creates the canonical value used by the engine
+    try:
+        temp_c = f_to_c(temp_f)
+        data_error = False
+    except ValueError as e:
+        st.error(f"Input Error: {e}")
+        temp_c = 0.0
+        data_error = True
+    
+    # Thermal Zone UI Logic
     if temp_f < 311: zone_color, zone_name = "🟢", "Zone A - Flavor/Cerebral"
     elif temp_f < 365: zone_color, zone_name = "🟢", "Zone B - Medical/Entourage"
     elif temp_f < 401: zone_color, zone_name = "🟡", "Zone C - High Extraction"
     elif temp_f < 482: zone_color, zone_name = "🟠", "Zone D - High Risk (Benzene)"
     else: zone_color, zone_name = "🔴", "Zone E - Combustion (Avoid!)"
     
-    st.info(f"{zone_color} **{zone_name}**\n\n{temp_f}°F = {round((temp_f - 32) / 1.8, 1)}°C")
+    st.info(f"{zone_color} **{zone_name}**\n\n{temp_f}°F = {temp_c}{CANONICAL_UNIT}")
     
     st.divider()
     st.header("🌱 Cultivation Data")
@@ -139,37 +116,30 @@ with col1:
         c_a, c_b = st.columns([2, 1])
         with c_a:
             c_name = st.selectbox(f"Compound {i+1}", 
-                ["THC", "CBD", "CBG", "CBN", "THCV", "THCP", "CBC",
-                 "Myrcene", "Limonene", "Alpha-Pinene", "Linalool", 
-                 "Caryophyllene", "Humulene", "Terpinolene",
-                 "Cannflavin A", "Cannflavin B", "Quercetin", "Apigenin", "Borneol"],
+                ["THC", "CBD", "CBG", "CBN", "THCV", "THCP", "CBC", "Myrcene", "Limonene", "Alpha-Pinene", "Linalool", "Caryophyllene", "Humulene", "Terpinolene", "Cannflavin A", "Cannflavin B", "Quercetin", "Apigenin", "Borneol"],
                 key=f"c_{i}", index=0 if i==0 else (10 if i==1 else 5))
         with c_b:
-            c_val = st.number_input("% / ppm", 0.0, 100.0, 
-                1.2 if "Cannflavin" in c_name else (18.0 if c_name=="THC" else 0.8),
-                step=0.1, key=f"v_{i}")
+            c_val = st.number_input("% / ppm", 0.0, 100.0, 18.0 if c_name=="THC" else 0.8, step=0.1, key=f"v_{i}")
         
-        # Determine type for the engine
-        c_type = "cannabinoid" if c_name in ["THC","CBD","CBG","CBN","THCV","THCP","CBC"] else \
-                 "terpene" if c_name in ["Myrcene","Limonene","Alpha-Pinene","Linalool","Caryophyllene","Humulene","Terpinolene","Borneol"] else \
-                 "flavonoid"
-        
+        c_type = "cannabinoid" if i < 7 else "terpene" # Simplified for this demo
         compounds.append({"name": c_name, "val": c_val, "type": c_type})
 
 # --- EXECUTION ---
-if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True):
+if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True, disabled=data_error):
     with st.spinner("Analyzing bioavailability..."):
-        # Construct the User Profile for the engine
-        user_profile = {'interface_temp': temp_f}
+        # The user_profile now explicitly identifies the unit to avoid engine ambiguity
+        user_profile = {
+            'interface_temp_c': temp_c, 
+            'interface_temp_f': temp_f
+        }
         
-        # Construct the Product List
         product_data = [{
             "name": p_name,
             "growStyle": grow_style,
             "compounds": compounds
         }]
         
-        # --- DIRECT ENGINE CALL (No API needed!) ---
+        # Engine call using the Integrated Manifold
         results = engine.rank_products_integrated(user_profile, product_data)
         
         if results:
@@ -191,29 +161,24 @@ if st.button("🚀 EXECUTE CLINICAL AUDIT", use_container_width=True):
                 # Thermal Details Table
                 if data.get('thermal_details'):
                     st.markdown("#### 🌡️ Thermal Activation Status")
-                    t_data = []
+                    t_rows = []
                     for name, det in data['thermal_details'].items():
-                        icon = "✅" if "Fully" in det['status'] else "⚡" if "Partial" in det['status'] else "🔒"
-                        t_data.append({
+                        # Engine should use evaluate_gate_state to determine this status
+                        # If boiling point is C, it matches our temp_c perfectly
+                        status_enum = evaluate_gate_state(temp_c, det['boiling_point_c'])
+                        label = state_label(status_enum)
+                        icon = "✅" if status_enum == ThermalState.UNLOCKED else "🔒"
+                        
+                        t_rows.append({
                             "Compound": name,
-                            "Status": f"{icon} {det['status']}", 
-                            "Boiling Point": f"{det['boiling_point_f']}°F"
+                            "Status": f"{icon} {label}", 
+                            "Threshold": f"{det['boiling_point_c']}{CANONICAL_UNIT}"
                         })
-                    st.dataframe(pd.DataFrame(t_data), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(t_rows), use_container_width=True, hide_index=True)
 
-# --- FOOTER (This is now OUTSIDE the button logic) ---
+# --- FOOTER ---
 st.divider()
-
-footer_col1, footer_col2, footer_col3 = st.columns(3)
-
-with footer_col1:
-    st.caption("🧬 GreenForge v2.0")
-    st.caption("Computational Pharmacognosy")
-
-with footer_col2:
-    st.caption("📚 Research-Based")
-    st.caption("500+ Strains, thermal modeling")
-
-with footer_col3:
-    st.caption("📍 Manteca, California")
-    st.caption("Proprietary Logic Engine")
+f1, f2, f3 = st.columns(3)
+with f1: st.caption("🧬 GreenForge v3.0 | Manteca, CA")
+with f2: st.caption("📚 Research-Based Thermal Modeling")
+with f3: st.caption("Proprietary Oak & Sparrow Logic")
