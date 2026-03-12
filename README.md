@@ -1,3 +1,5 @@
+Since Conception and in Continuous use. Copyright and IP protected Oak and Sparrow Systems Enterprise LLC
+
 # GreenForge: Computational Pharmacognosy Engine
 
 ![GreenForge Dashboard](dashboard.png)
