@@ -27,3 +27,4 @@ dist-ssr
 
 .vercel
 >>>>>>> 6e27fce22fdff12a6eba6f18af99adc0d939c133
+.env*.local
